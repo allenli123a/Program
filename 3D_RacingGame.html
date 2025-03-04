@@ -113,34 +113,6 @@
 
 
 
-<div id="mobile-controls">
-    <button id="accelerate-btn">▲ 加速</button>
-    <button id="brake-btn">▼ 減速</button>
-</div>
-
-<style>
-    /* 手機控制按鈕樣式 */
-    #mobile-controls {
-        position: absolute;
-        bottom: 20px;
-        width: 100%;
-        display: flex;
-        justify-content: center;
-        gap: 20px;
-    }
-    
-    #mobile-controls button {
-        width: 80px;
-        height: 80px;
-        font-size: 18px;
-        background-color: rgba(255, 255, 255, 0.5);
-        border: none;
-        border-radius: 10px;
-        text-align: center;
-        cursor: pointer;
-    }
-</style>
-
 
   
   <script type="importmap">
@@ -210,6 +182,42 @@
 
     // 初始化遊戲
     init();
+
+let touchStartX = 0, touchStartY = 0;
+
+// 監聽手指按下位置
+document.addEventListener("touchstart", (event) => {
+    const touch = event.touches[0];
+    touchStartX = touch.clientX;
+    touchStartY = touch.clientY;
+});
+
+// 監聽滑動手勢
+document.addEventListener("touchmove", (event) => {
+    if (event.touches.length > 1) return; // 忽略多點觸控
+    const touch = event.touches[0];
+    const deltaX = touch.clientX - touchStartX;
+    const deltaY = touch.clientY - touchStartY;
+
+    if (Math.abs(deltaX) > Math.abs(deltaY)) {
+        if (deltaX > 30) { // 右滑（右轉）
+            keys.ArrowRight = true;
+            keys.ArrowLeft = false;
+        } else if (deltaX < -30) { // 左滑（左轉）
+            keys.ArrowLeft = true;
+            keys.ArrowRight = false;
+        }
+    } else {
+        if (deltaY > 30) { // 下滑（減速）
+            keys.ArrowDown = true;
+            keys.ArrowUp = false;
+        } else if (deltaY < -30) { // 上滑（加速）
+            keys.ArrowUp = true;
+            keys.ArrowDown = false;
+        }
+    }
+});
+
     animate();
 
     function init() {
