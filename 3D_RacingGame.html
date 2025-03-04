@@ -184,11 +184,7 @@
     init();
 
 let touchStartX = 0, touchStartY = 0;
-
-let touchStartX = 0, touchStartY = 0;
-let isSwiping = false; // 防止車子一直滑動
-
-// 設定車道邊界
+let isSwiping = false; // 防止車子持續滑動
 const ROAD_LEFT_LIMIT = -5;
 const ROAD_RIGHT_LIMIT = 5;
 
@@ -201,39 +197,36 @@ document.addEventListener("touchstart", (event) => {
 });
 
 // 監聽滑動手勢
-document.addEventListener("touchmove", (event) => {
-    if (!isSwiping || event.touches.length > 1) return; // 忽略多點觸控
-    const touch = event.touches[0];
-    const deltaX = touch.clientX - touchStartX;
-    const deltaY = touch.clientY - touchStartY;
+document.addEventListener("touchend", (event) => {
+    if (!isSwiping) return;
+    const deltaX = event.changedTouches[0].clientX - touchStartX;
+    const deltaY = event.changedTouches[0].clientY - touchStartY;
 
     if (Math.abs(deltaX) > Math.abs(deltaY)) {
         if (deltaX > 50) { // 右滑（右轉）
             car.position.x = Math.max(car.position.x - 2, ROAD_LEFT_LIMIT);
-            isSwiping = false; // 停止滑動，避免車子一直移動
         } else if (deltaX < -50) { // 左滑（左轉）
             car.position.x = Math.min(car.position.x + 2, ROAD_RIGHT_LIMIT);
-            isSwiping = false;
         }
     } else {
         if (deltaY > 50) { // 下滑（減速）
             keys.ArrowDown = true;
             keys.ArrowUp = false;
-            isSwiping = false;
         } else if (deltaY < -50) { // 上滑（加速）
             keys.ArrowUp = true;
             keys.ArrowDown = false;
-            isSwiping = false;
         }
     }
+
+    isSwiping = false; // 停止滑動
 });
 
-// 監聽觸控結束，讓車子停止持續滑動
-document.addEventListener("touchend", () => {
-    isSwiping = false;
+// 點擊螢幕時，停止左右移動
+document.addEventListener("click", () => {
     keys.ArrowLeft = false;
     keys.ArrowRight = false;
 });
+
 
 
     animate();
