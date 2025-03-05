@@ -578,7 +578,7 @@ document.addEventListener("click", () => {
       obstacles.push(obstacle);
       scene.add(obstacle);
 
-      lastObstaclePos = z;
+      lastObstaclePos = z;  // 確保新障礙物位置被記錄
     }
 
     function checkCollisions() {
@@ -779,11 +779,14 @@ function updateRoad(delta) {
     }
   }
 
-  // 若障礙物不足則產生新的障礙物
-  if (lastObstaclePos - car.position.z < ROAD_SEGMENTS * SEGMENT_LENGTH) {
-    const nextObstaclePos = lastObstaclePos + Math.random() * 30 + 20;
+
+// 確保場上至少有 2 個障礙物，並且每 50 單位距離就生成新物品
+if (obstacles.length < 2 || (lastObstaclePos - car.position.z < 50)) {
+    const nextObstaclePos = car.position.z + 50 + Math.random() * 20;
+    console.log("新增障礙物於", nextObstaclePos); // 確認有產生新障礙物
     addRandomObstacle(nextObstaclePos);
-  }
+}
+
 
   // 更新障礙物狀態：移除過遠的障礙物，並加入旋轉效果
   for (const obstacle of obstacles) {
