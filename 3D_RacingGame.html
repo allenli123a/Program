@@ -600,40 +600,45 @@ document.addEventListener("click", () => {
       }
     }
 
-    function handleCollision(obstacle) {
-      const obstacleType = obstacle.userData.type;
 
-      switch (obstacleType) {
+
+function handleCollision(obstacle) {
+    const obstacleType = obstacle.userData.type;
+
+    switch (obstacleType) {
         case OBSTACLE_TYPES.DEADLY:
-          // 紅色障礙物：遊戲結束
-          gameOver();
-          break;
-        case OBSTACLE_TYPES.BOOST:
-          // 綠色障礙物：獲得加速效果
-          speed = Math.min(speed + 30, maxSpeed * 1.2);
-          scene.remove(obstacle);
-          obstacles = obstacles.filter(o => o !== obstacle);
-          break;
-        case OBSTACLE_TYPES.STANDARD:
-          // 黃色障礙物：扣除生命值
-          health -= 20;
-          updateHealthBar();
-
-          // 簡單視覺回饋
-          car.position.y += 0.5;
-          setTimeout(() => {
-            car.position.y = 0.5;
-          }, 200);
-
-          scene.remove(obstacle);
-          obstacles = obstacles.filter(o => o !== obstacle);
-
-          if (health <= 0) {
+            // 紅色障礙物：遊戲結束
             gameOver();
-          }
-          break;
-      }
+            break;
+
+        case OBSTACLE_TYPES.BOOST:
+            // 綠色障礙物：補血
+            health = Math.min(health + 20, 100); // 最大血量 100
+            updateHealthBar();
+            scene.remove(obstacle);
+            obstacles = obstacles.filter(o => o !== obstacle);
+            break;
+
+        case OBSTACLE_TYPES.STANDARD:
+            // 黃色障礙物：扣血
+            health -= 20;
+            updateHealthBar();
+            if (health <= 0) {
+                gameOver();
+            }
+
+            // 撞擊時跳一下
+            car.position.y += 0.5;
+            setTimeout(() => {
+                car.position.y = 0.5;
+            }, 200);
+
+            scene.remove(obstacle);
+            obstacles = obstacles.filter(o => o !== obstacle);
+            break;
     }
+}
+
 
     function updateHealthBar() {
       healthBar.style.width = `${health}%`;
@@ -791,6 +796,9 @@ function updateRoad(delta) {
   }
 }
 
+if (obstacles.length === 0) {
+    addRandomObstacle(car.position.z + 50); // 在前方 50 單位處生成新的障礙物
+}
 
 
     function removeOldRoadSegments() {
