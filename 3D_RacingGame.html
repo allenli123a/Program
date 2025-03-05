@@ -796,8 +796,10 @@ function updateRoad(delta) {
   }
 }
 
-if (obstacles.length === 0) {
-    addRandomObstacle(car.position.z + 50); // 在前方 50 單位處生成新的障礙物
+// 確保場上至少有一個障礙物，並且每 50 單位距離就生成新物品
+if (obstacles.length === 0 || lastObstaclePos - car.position.z < 50) {
+    const nextObstaclePos = car.position.z + 50 + Math.random() * 20; // 確保前方一定有障礙物
+    addRandomObstacle(nextObstaclePos);
 }
 
 
