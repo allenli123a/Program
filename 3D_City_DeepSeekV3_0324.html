@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D City Scene with Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+        #time-control {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        WASD to move | Mouse to look around | Scroll to zoom<br>
+        Space to ascend | Shift to descend
+    </div>
+    <div id="time-control">
+        <label for="time-slider">Time of Day:</label>
+        <input type="range" id="time-slider" min="0" max="24" step="0.1" value="12">
+        <span id="time-display">12:00</span>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/GLTFLoader.js"></script>
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(renderer.domElement);
+
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        camera.position.set(0, 50, 100);
+        controls.update();
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x404040);
+        scene.add(ambientLight);
+
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(0, 100, 0);
+        directionalLight.castShadow = true;
+        directionalLight.shadow.mapSize.width = 2048;
+        directionalLight.shadow.mapSize.height = 2048;
+        directionalLight.shadow.camera.near = 0.5;
+        directionalLight.shadow.camera.far = 500;
+        directionalLight.shadow.camera.left = -100;
+        directionalLight.shadow.camera.right = 100;
+        directionalLight.shadow.camera.top = 100;
+        directionalLight.shadow.camera.bottom = -100;
+        scene.add(directionalLight);
+
+        // Sun/Moon for day-night cycle
+        const sun = new THREE.Mesh(
+            new THREE.SphereGeometry(5, 32, 32),
+            new THREE.MeshBasicMaterial({ color: 0xffff00 })
+        );
+        scene.add(sun);
+
+        // Ground
+        const groundGeometry = new THREE.PlaneGeometry(500, 500);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x333333,
+            roughness: 0.8,
+            metalness: 0.2
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // City grid
+        const blockSize = 50;
+        const roadWidth = 10;
+        const sidewalkWidth = 3;
+        const gridSize = 5; // 5x5 grid
+
+        // Create roads
+        function createRoads() {
+            const roadMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0xffffff });
+            
+            // Horizontal roads
+            for (let i = 0; i <= gridSize; i++) {
+                const road = new THREE.Mesh(
+                    new THREE.BoxGeometry(blockSize * gridSize + roadWidth, 0.1, roadWidth),
+                    roadMaterial
+                );
+                road.position.set(
+                    (blockSize * gridSize) / 2 - blockSize / 2,
+                    0.1,
+                    i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2
+                );
+                road.receiveShadow = true;
+                scene.add(road);
+                
+                // Road markings
+                if (i < gridSize) {
+                    for (let j = 0; j < gridSize; j++) {
+                        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2, 0.2, i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2),
+                            new THREE.Vector3((j + 1) * blockSize - (blockSize * gridSize) / 2 + blockSize / 2, 0.2, i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2)
+                        ]);
+                        const line = new THREE.Line(lineGeometry, lineMaterial);
+                        scene.add(line);
+                    }
+                }
+            }
+            
+            // Vertical roads
+            for (let i = 0; i <= gridSize; i++) {
+                const road = new THREE.Mesh(
+                    new THREE.BoxGeometry(roadWidth, 0.1, blockSize * gridSize + roadWidth),
+                    roadMaterial
+                );
+                road.position.set(
+                    i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2,
+                    0.1,
+                    (blockSize * gridSize) / 2 - blockSize / 2
+                );
+                road.receiveShadow = true;
+                scene.add(road);
+                
+                // Road markings
+                if (i < gridSize) {
+                    for (let j = 0; j < gridSize; j++) {
+                        const lineGeometry = new THREE.BufferGeometry().setFromPoints([
+                            new THREE.Vector3(i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2, 0.2, j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2),
+                            new THREE.Vector3(i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2, 0.2, (j + 1) * blockSize - (blockSize * gridSize) / 2 + blockSize / 2)
+                        ]);
+                        const line = new THREE.Line(lineGeometry, lineMaterial);
+                        scene.add(line);
+                    }
+                }
+            }
+            
+            // Sidewalks
+            const sidewalkMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    // Horizontal sidewalks
+                    const sidewalkH = new THREE.Mesh(
+                        new THREE.BoxGeometry(blockSize - roadWidth, 0.2, sidewalkWidth),
+                        sidewalkMaterial
+                    );
+                    sidewalkH.position.set(
+                        i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2,
+                        0.2,
+                        j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2 - roadWidth/2 - sidewalkWidth/2
+                    );
+                    sidewalkH.receiveShadow = true;
+                    scene.add(sidewalkH);
+                    
+                    const sidewalkH2 = new THREE.Mesh(
+                        new THREE.BoxGeometry(blockSize - roadWidth, 0.2, sidewalkWidth),
+                        sidewalkMaterial
+                    );
+                    sidewalkH2.position.set(
+                        i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2,
+                        0.2,
+                        j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2 + roadWidth/2 + sidewalkWidth/2
+                    );
+                    sidewalkH2.receiveShadow = true;
+                    scene.add(sidewalkH2);
+                    
+                    // Vertical sidewalks
+                    const sidewalkV = new THREE.Mesh(
+                        new THREE.BoxGeometry(sidewalkWidth, 0.2, blockSize - roadWidth),
+                        sidewalkMaterial
+                    );
+                    sidewalkV.position.set(
+                        i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2 - roadWidth/2 - sidewalkWidth/2,
+                        0.2,
+                        j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2
+                    );
+                    sidewalkV.receiveShadow = true;
+                    scene.add(sidewalkV);
+                    
+                    const sidewalkV2 = new THREE.Mesh(
+                        new THREE.BoxGeometry(sidewalkWidth, 0.2, blockSize - roadWidth),
+                        sidewalkMaterial
+                    );
+                    sidewalkV2.position.set(
+                        i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2 + roadWidth/2 + sidewalkWidth/2,
+                        0.2,
+                        j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2
+                    );
+                    sidewalkV2.receiveShadow = true;
+                    scene.add(sidewalkV2);
+                }
+            }
+        }
+
+        // Buildings
+        function createBuildings() {
+            const buildingColors = [
+                0x8B0000, 0x4682B4, 0x2E8B57, 0x708090, 0xD2691E,
+                0x483D8B, 0x556B2F, 0x9932CC, 0x8FBC8F, 0xE9967A
+            ];
+            
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    // Determine building type (skyscraper, apartment, shop)
+                    let height, width, depth;
+                    const rand = Math.random();
+                    
+                    if (rand < 0.1) {
+                        // Skyscraper
+                        height = 50 + Math.random() * 100;
+                        width = 20 + Math.random() * 10;
+                        depth = 20 + Math.random() * 10;
+                    } else if (rand < 0.6) {
+                        // Apartment building
+                        height = 20 + Math.random() * 30;
+                        width = 15 + Math.random() * 10;
+                        depth = 15 + Math.random() * 10;
+                    } else {
+                        // Small shop
+                        height = 5 + Math.random() * 10;
+                        width = 10 + Math.random() * 10;
+                        depth = 10 + Math.random() * 10;
+                    }
+                    
+                    const buildingGeometry = new THREE.BoxGeometry(width, height, depth);
+                    const buildingMaterial = new THREE.MeshStandardMaterial({ 
+                        color: buildingColors[Math.floor(Math.random() * buildingColors.length)],
+                        roughness: 0.7,
+                        metalness: 0.1
+                    });
+                    const building = new THREE.Mesh(buildingGeometry, buildingMaterial);
+                    
+                    building.position.set(
+                        i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2,
+                        height / 2,
+                        j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2
+                    );
+                    
+                    building.castShadow = true;
+                    building.receiveShadow = true;
+                    
+                    // Add windows
+                    if (height > 15) {
+                        const windowColor = Math.random() > 0.5 ? 0xADD8E6 : 0xFFFF00;
+                        const windowMaterial = new THREE.MeshBasicMaterial({ color: windowColor });
+                        
+                        const windowCount = Math.floor(height / 5) * 4;
+                        for (let w = 0; w < windowCount; w++) {
+                            const windowGeometry = new THREE.PlaneGeometry(2, 2);
+                            const window = new THREE.Mesh(windowGeometry, windowMaterial);
+                            
+                            // Position windows on each side
+                            const side = w % 4;
+                            const floor = Math.floor(w / 4);
+                            
+                            const windowHeight = 5 * (floor + 1) - 2.5;
+                            const windowOffset = (width / 2) + 0.1;
+                            const depthOffset = (depth / 2) + 0.1;
+                            
+                            switch (side) {
+                                case 0: // Front
+                                    window.position.set(
+                                        building.position.x + (Math.random() * width/2 - width/4),
+                                        windowHeight,
+                                        building.position.z + depthOffset
+                                    );
+                                    window.rotation.y = Math.PI;
+                                    break;
+                                case 1: // Back
+                                    window.position.set(
+                                        building.position.x + (Math.random() * width/2 - width/4),
+                                        windowHeight,
+                                        building.position.z - depthOffset
+                                    );
+                                    break;
+                                case 2: // Left
+                                    window.position.set(
+                                        building.position.x - windowOffset,
+                                        windowHeight,
+                                        building.position.z + (Math.random() * depth/2 - depth/4)
+                                    );
+                                    window.rotation.y = Math.PI / 2;
+                                    break;
+                                case 3: // Right
+                                    window.position.set(
+                                        building.position.x + windowOffset,
+                                        windowHeight,
+                                        building.position.z + (Math.random() * depth/2 - depth/4)
+                                    );
+                                    window.rotation.y = -Math.PI / 2;
+                                    break;
+                            }
+                            
+                            scene.add(window);
+                        }
+                    }
+                    
+                    scene.add(building);
+                }
+            }
+        }
+
+        // Street elements
+        function createStreetElements() {
+            // Lamp posts
+            const lampPostMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const lampLightMaterial = new THREE.MeshBasicMaterial({ color: 0xFFFFCC });
+            
+            for (let i = 0; i < gridSize + 1; i++) {
+                for (let j = 0; j < gridSize + 1; j++) {
+                    if (i < gridSize && j < gridSize) continue;
+                    
+                    const lampPost = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.3, 0.5, 8, 8),
+                        lampPostMaterial
+                    );
+                    
+                    const lampLight = new THREE.Mesh(
+                        new THREE.SphereGeometry(1, 16, 16),
+                        lampLightMaterial
+                    );
+                    
+                    lampPost.position.set(
+                        i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2,
+                        4,
+                        j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2
+                    );
+                    
+                    lampLight.position.set(
+                        lampPost.position.x,
+                        8,
+                        lampPost.position.z
+                    );
+                    
+                    lampPost.castShadow = true;
+                    lampLight.castShadow = true;
+                    
+                    scene.add(lampPost);
+                    scene.add(lampLight);
+                    
+                    // Add point light
+                    const lampPointLight = new THREE.PointLight(0xFFFFCC, 1, 15);
+                    lampPointLight.position.set(lampLight.position.x, lampLight.position.y, lampLight.position.z);
+                    lampPointLight.castShadow = true;
+                    lampPointLight.shadow.mapSize.width = 512;
+                    lampPointLight.shadow.mapSize.height = 512;
+                    lampPointLight.shadow.camera.near = 0.5;
+                    lampPointLight.shadow.camera.far = 20;
+                    scene.add(lampPointLight);
+                }
+            }
+            
+            // Benches
+            const benchMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            for (let i = 0; i < gridSize * 2; i++) {
+                const benchSeat = new THREE.Mesh(
+                    new THREE.BoxGeometry(4, 0.5, 1),
+                    benchMaterial
+                );
+                
+                const benchBack = new THREE.Mesh(
+                    new THREE.BoxGeometry(4, 1.5, 0.2),
+                    benchMaterial
+                );
+                
+                const benchLeg1 = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 1, 0.3),
+                    benchMaterial
+                );
+                
+                const benchLeg2 = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.3, 1, 0.3),
+                    benchMaterial
+                );
+                
+                // Position along sidewalks
+                let x, z, rotation;
+                if (Math.random() > 0.5) {
+                    // Horizontal sidewalk
+                    x = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                    z = (Math.floor(Math.random() * gridSize) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    z += Math.random() > 0.5 ? (roadWidth/2 + sidewalkWidth/2) : -(roadWidth/2 + sidewalkWidth/2);
+                    rotation = Math.PI / 2;
+                } else {
+                    // Vertical sidewalk
+                    x = (Math.floor(Math.random() * gridSize) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    x += Math.random() > 0.5 ? (roadWidth/2 + sidewalkWidth/2) : -(roadWidth/2 + sidewalkWidth/2);
+                    z = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                    rotation = 0;
+                }
+                
+                benchSeat.position.set(x, 1, z);
+                benchSeat.rotation.y = rotation;
+                
+                benchBack.position.set(x, 2, z + (rotation === 0 ? -0.6 : 0));
+                benchBack.rotation.y = rotation;
+                
+                benchLeg1.position.set(x + (rotation === 0 ? -2 : 0), 0.5, z + (rotation === 0 ? 0 : -2));
+                benchLeg2.position.set(x + (rotation === 0 ? 2 : 0), 0.5, z + (rotation === 0 ? 0 : 2));
+                
+                scene.add(benchSeat);
+                scene.add(benchBack);
+                scene.add(benchLeg1);
+                scene.add(benchLeg2);
+            }
+            
+            // Trees
+            const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+            const leavesMaterial = new THREE.MeshStandardMaterial({ color: 0x228B22 });
+            
+            for (let i = 0; i < gridSize * 3; i++) {
+                const trunk = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.5, 0.7, 5, 8),
+                    trunkMaterial
+                );
+                
+                const leaves = new THREE.Mesh(
+                    new THREE.SphereGeometry(3, 16, 16),
+                    leavesMaterial
+                );
+                
+                // Position along sidewalks
+                let x, z;
+                if (Math.random() > 0.5) {
+                    // Horizontal sidewalk
+                    x = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                    z = (Math.floor(Math.random() * gridSize) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    z += Math.random() > 0.5 ? (roadWidth/2 + sidewalkWidth/2) : -(roadWidth/2 + sidewalkWidth/2);
+                } else {
+                    // Vertical sidewalk
+                    x = (Math.floor(Math.random() * gridSize) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    x += Math.random() > 0.5 ? (roadWidth/2 + sidewalkWidth/2) : -(roadWidth/2 + sidewalkWidth/2);
+                    z = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                }
+                
+                trunk.position.set(x, 2.5, z);
+                leaves.position.set(x, 7, z);
+                
+                trunk.castShadow = true;
+                leaves.castShadow = true;
+                
+                scene.add(trunk);
+                scene.add(leaves);
+            }
+        }
+
+        // Traffic lights
+        function createTrafficLights() {
+            const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+            const lightMaterialOff = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const lightMaterialRed = new THREE.MeshStandardMaterial({ color: 0xFF0000 });
+            const lightMaterialYellow = new THREE.MeshStandardMaterial({ color: 0xFFFF00 });
+            const lightMaterialGreen = new THREE.MeshStandardMaterial({ color: 0x00FF00 });
+            
+            // Create traffic lights at intersections
+            for (let i = 0; i < gridSize + 1; i++) {
+                for (let j = 0; j < gridSize + 1; j++) {
+                    const pole = new THREE.Mesh(
+                        new THREE.CylinderGeometry(0.2, 0.2, 6, 8),
+                        poleMaterial
+                    );
+                    
+                    const lightBox = new THREE.Mesh(
+                        new THREE.BoxGeometry(1.5, 3, 0.5),
+                        poleMaterial
+                    );
+                    
+                    const redLight = new THREE.Mesh(
+                        new THREE.CircleGeometry(0.4, 16),
+                        lightMaterialRed
+                    );
+                    
+                    const yellowLight = new THREE.Mesh(
+                        new THREE.CircleGeometry(0.4, 16),
+                        lightMaterialYellow
+                    );
+                    
+                    const greenLight = new THREE.Mesh(
+                        new THREE.CircleGeometry(0.4, 16),
+                        lightMaterialGreen
+                    );
+                    
+                    // Position at intersections
+                    const x = i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2;
+                    const z = j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2;
+                    
+                    pole.position.set(x, 3, z);
+                    lightBox.position.set(x, 5, z);
+                    
+                    redLight.position.set(x, 5.5, z - 0.26);
+                    redLight.rotation.x = Math.PI / 2;
+                    
+                    yellowLight.position.set(x, 5, z - 0.26);
+                    yellowLight.rotation.x = Math.PI / 2;
+                    
+                    greenLight.position.set(x, 4.5, z - 0.26);
+                    greenLight.rotation.x = Math.PI / 2;
+                    
+                    // Add point lights
+                    const redPointLight = new THREE.PointLight(0xFF0000, 0, 5);
+                    redPointLight.position.set(redLight.position.x, redLight.position.y, redLight.position.z);
+                    
+                    const yellowPointLight = new THREE.PointLight(0xFFFF00, 0, 5);
+                    yellowPointLight.position.set(yellowLight.position.x, yellowLight.position.y, yellowLight.position.z);
+                    
+                    const greenPointLight = new THREE.PointLight(0x00FF00, 0, 5);
+                    greenPointLight.position.set(greenLight.position.x, greenLight.position.y, greenLight.position.z);
+                    
+                    // Store references for animation
+                    trafficLights.push({
+                        redLight,
+                        yellowLight,
+                        greenLight,
+                        redPointLight,
+                        yellowPointLight,
+                        greenPointLight,
+                        state: 'red', // 'red', 'yellow', 'green'
+                        timer: Math.random() * 5
+                    });
+                    
+                    scene.add(pole);
+                    scene.add(lightBox);
+                    scene.add(redLight);
+                    scene.add(yellowLight);
+                    scene.add(greenLight);
+                    scene.add(redPointLight);
+                    scene.add(yellowPointLight);
+                    scene.add(greenPointLight);
+                }
+            }
+        }
+
+        // Cars
+        const cars = [];
+        function createCars() {
+            const carColors = [
+                0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFF00FF,
+                0x00FFFF, 0xFFFFFF, 0x888888, 0xFFA500, 0xA52A2A
+            ];
+            
+            for (let i = 0; i < 20; i++) {
+                const carBody = new THREE.Mesh(
+                    new THREE.BoxGeometry(4, 2, 8),
+                    new THREE.MeshStandardMaterial({ 
+                        color: carColors[Math.floor(Math.random() * carColors.length)],
+                        metalness: 0.5,
+                        roughness: 0.6
+                    })
+                );
+                
+                const carTop = new THREE.Mesh(
+                    new THREE.BoxGeometry(3.8, 1, 4),
+                    new THREE.MeshStandardMaterial({ 
+                        color: 0x111111,
+                        metalness: 0.8,
+                        roughness: 0.2
+                    })
+                );
+                
+                const wheelGeometry = new THREE.CylinderGeometry(0.5, 0.5, 0.4, 16);
+                wheelGeometry.rotateZ(Math.PI / 2);
+                const wheelMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+                
+                const wheelFL = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                const wheelFR = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                const wheelRL = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                const wheelRR = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                
+                carBody.position.y = 1;
+                carTop.position.y = 2.5;
+                carTop.position.z = -1;
+                
+                wheelFL.position.set(-2, 0.5, 3);
+                wheelFR.position.set(2, 0.5, 3);
+                wheelRL.position.set(-2, 0.5, -3);
+                wheelRR.position.set(2, 0.5, -3);
+                
+                const car = new THREE.Group();
+                car.add(carBody);
+                car.add(carTop);
+                car.add(wheelFL);
+                car.add(wheelFR);
+                car.add(wheelRL);
+                car.add(wheelRR);
+                
+                // Random starting position on roads
+                let x, z, direction;
+                if (Math.random() > 0.5) {
+                    // Horizontal road
+                    x = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                    z = (Math.floor(Math.random() * (gridSize + 1)) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    direction = Math.random() > 0.5 ? 1 : -1;
+                    car.rotation.y = direction > 0 ? Math.PI : 0;
+                } else {
+                    // Vertical road
+                    x = (Math.floor(Math.random() * (gridSize + 1)) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    z = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                    direction = Math.random() > 0.5 ? 1 : -1;
+                    car.rotation.y = direction > 0 ? Math.PI / 2 : -Math.PI / 2;
+                }
+                
+                car.position.set(x, 0, z);
+                car.castShadow = true;
+                
+                cars.push({
+                    object: car,
+                    direction,
+                    speed: 0.1 + Math.random() * 0.2,
+                    horizontal: Math.random() > 0.5,
+                    nextTurn: Math.random() > 0.7 ? (Math.random() > 0.5 ? 'left' : 'right') : null,
+                    turnProgress: 0
+                });
+                
+                scene.add(car);
+            }
+        }
+
+        // Pedestrians
+        const pedestrians = [];
+        function createPedestrians() {
+            for (let i = 0; i < 30; i++) {
+                const head = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.4, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0xFFD700 })
+                );
+                
+                const body = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.8, 1, 0.4),
+                    new THREE.MeshStandardMaterial({ color: 0x4682B4 })
+                );
+                
+                const legL = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.8, 0.2),
+                    new THREE.MeshStandardMaterial({ color: 0x000000 })
+                );
+                
+                const legR = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.8, 0.2),
+                    new THREE.MeshStandardMaterial({ color: 0x000000 })
+                );
+                
+                const armL = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.6, 0.2),
+                    new THREE.MeshStandardMaterial({ color: 0x4682B4 })
+                );
+                
+                const armR = new THREE.Mesh(
+                    new THREE.BoxGeometry(0.2, 0.6, 0.2),
+                    new THREE.MeshStandardMaterial({ color: 0x4682B4 })
+                );
+                
+                head.position.y = 1.8;
+                body.position.y = 1;
+                
+                legL.position.set(-0.2, 0.4, 0);
+                legR.position.set(0.2, 0.4, 0);
+                
+                armL.position.set(-0.5, 1.2, 0);
+                armR.position.set(0.5, 1.2, 0);
+                
+                const pedestrian = new THREE.Group();
+                pedestrian.add(head);
+                pedestrian.add(body);
+                pedestrian.add(legL);
+                pedestrian.add(legR);
+                pedestrian.add(armL);
+                pedestrian.add(armR);
+                
+                // Random starting position on sidewalks
+                let x, z, direction;
+                if (Math.random() > 0.5) {
+                    // Horizontal sidewalk
+                    x = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                    z = (Math.floor(Math.random() * gridSize) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    z += Math.random() > 0.5 ? (roadWidth/2 + sidewalkWidth/2 - 1) : -(roadWidth/2 + sidewalkWidth/2 - 1);
+                    direction = Math.random() > 0.5 ? 1 : -1;
+                    pedestrian.rotation.y = direction > 0 ? Math.PI : 0;
+                } else {
+                    // Vertical sidewalk
+                    x = (Math.floor(Math.random() * gridSize) * blockSize) - (blockSize * gridSize) / 2 + blockSize / 2;
+                    x += Math.random() > 0.5 ? (roadWidth/2 + sidewalkWidth/2 - 1) : -(roadWidth/2 + sidewalkWidth/2 - 1);
+                    z = (Math.random() * (blockSize * gridSize)) - (blockSize * gridSize) / 2;
+                    direction = Math.random() > 0.5 ? 1 : -1;
+                    pedestrian.rotation.y = direction > 0 ? Math.PI / 2 : -Math.PI / 2;
+                }
+                
+                pedestrian.position.set(x, 0, z);
+                pedestrian.castShadow = true;
+                
+                pedestrians.push({
+                    object: pedestrian,
+                    direction,
+                    speed: 0.02 + Math.random() * 0.03,
+                    horizontal: Math.random() > 0.5,
+                    crossing: false,
+                    crossingProgress: 0,
+                    crossingStart: null
+                });
+                
+                scene.add(pedestrian);
+            }
+        }
+
+        // Crosswalks
+        function createCrosswalks() {
+            const crosswalkMaterial = new THREE.MeshStandardMaterial({ color: 0xFFFFFF });
+            
+            for (let i = 0; i < gridSize + 1; i++) {
+                for (let j = 0; j < gridSize + 1; j++) {
+                    if (i === 0 || j === 0 || i === gridSize || j === gridSize) continue;
+                    
+                    // Horizontal crosswalk
+                    for (let k = 0; k < 5; k++) {
+                        const stripe = new THREE.Mesh(
+                            new THREE.BoxGeometry(roadWidth - 2, 0.1, 0.5),
+                            crosswalkMaterial
+                        );
+                        
+                        stripe.position.set(
+                            i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2,
+                            0.11,
+                            j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2 - roadWidth/2 + 1 + k
+                        );
+                        
+                        scene.add(stripe);
+                    }
+                    
+                    // Vertical crosswalk
+                    for (let k = 0; k < 5; k++) {
+                        const stripe = new THREE.Mesh(
+                            new THREE.BoxGeometry(0.5, 0.1, roadWidth - 2),
+                            crosswalkMaterial
+                        );
+                        
+                        stripe.position.set(
+                            i * blockSize - (blockSize * gridSize) / 2 + blockSize / 2 - roadWidth/2 + 1 + k,
+                            0.11,
+                            j * blockSize - (blockSize * gridSize) / 2 + blockSize / 2
+                        );
+                        
+                        scene.add(stripe);
+                    }
+                }
+            }
+        }
+
+        // Traffic light states
+        const trafficLights = [];
+
+        // Create city elements
+        createRoads();
+        createBuildings();
+        createStreetElements();
+        createTrafficLights();
+        createCars();
+        createPedestrians();
+        createCrosswalks();
+
+        // Day-night cycle
+        let timeOfDay = 12; // 0-24 hours
+        const timeSlider = document.getElementById('time-slider');
+        const timeDisplay = document.getElementById('time-display');
+        
+        timeSlider.addEventListener('input', function() {
+            timeOfDay = parseFloat(this.value);
+            updateDayNightCycle();
+            
+            // Update display
+            const hours = Math.floor(timeOfDay);
+            const minutes = Math.floor((timeOfDay % 1) * 60);
+            timeDisplay.textContent = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+        });
+        
+        function updateDayNightCycle() {
+            // Calculate sun position
+            const sunAngle = (timeOfDay / 24) * Math.PI * 2;
+            const sunDistance = 200;
+            
+            sun.position.x = Math.cos(sunAngle) * sunDistance;
+            sun.position.z = Math.sin(sunAngle) * sunDistance;
+            sun.position.y = Math.sin(sunAngle) * sunDistance;
+            
+            // Update sun/moon appearance
+            if (timeOfDay > 6 && timeOfDay < 18) {
+                // Daytime
+                sun.material.color.setHex(0xFFFF00);
+                directionalLight.intensity = 1;
+                ambientLight.intensity = 0.4;
+            } else {
+                // Nighttime
+                sun.material.color.setHex(0xDDDDFF);
+                directionalLight.intensity = 0.1;
+                ambientLight.intensity = 0.1;
+            }
+            
+            // Update street lights
+            scene.traverse(function(child) {
+                if (child instanceof THREE.PointLight) {
+                    child.intensity = timeOfDay < 6 || timeOfDay > 18 ? 1 : 0;
+                }
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // Update traffic lights
+            trafficLights.forEach(light => {
+                light.timer += 0.01;
+                
+                if (light.timer > 10) {
+                    light.timer = 0;
+                    
+                    // Cycle through states
+                    if (light.state === 'red') {
+                        light.state = 'green';
+                        light.redLight.material.color.setHex(0x222222);
+                        light.redPointLight.intensity = 0;
+                        light.greenLight.material.color.setHex(0x00FF00);
+                        light.greenPointLight.intensity = 1;
+                    } else if (light.state === 'green') {
+                        light.state = 'yellow';
+                        light.greenLight.material.color.setHex(0x222222);
+                        light.greenPointLight.intensity = 0;
+                        light.yellowLight.material.color.setHex(0xFFFF00);
+                        light.yellowPointLight.intensity = 1;
+                    } else {
+                        light.state = 'red';
+                        light.yellowLight.material.color.setHex(0x222222);
+                        light.yellowPointLight.intensity = 0;
+                        light.redLight.material.color.setHex(0xFF0000);
+                        light.redPointLight.intensity = 1;
+                    }
+                }
+            });
+            
+            // Update cars
+            cars.forEach(car => {
+                if (car.turnProgress > 0) {
+                    // Currently turning
+                    car.turnProgress -= 0.01;
+                    
+                    if (car.horizontal) {
+                        car.object.rotation.y += (car.nextTurn === 'left' ? -0.02 : 0.02) * car.direction;
+                        car.object.position.x += car.speed * (car.nextTurn === 'left' ? -car.direction : car.direction);
+                        car.object.position.z += car.speed * car.direction;
+                    } else {
+                        car.object.rotation.y += (car.nextTurn === 'left' ? 0.02 : -0.02) * car.direction;
+                        car.object.position.z += car.speed * (car.nextTurn === 'left' ? car.direction : -car.direction);
+                        car.object.position.x += car.speed * car.direction;
+                    }
+                    
+                    if (car.turnProgress <= 0) {
+                        // Finish turn
+                        car.horizontal = !car.horizontal;
+                        car.nextTurn = null;
+                    }
+                } else {
+                    // Moving straight
+                    if (car.horizontal) {
+                        car.object.position.x += car.speed * car.direction;
+                        
+                        // Check for intersection
+                        const gridX = Math.round((car.object.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        const gridZ = Math.round((car.object.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        
+                        if (Math.abs((car.object.position.x + (blockSize * gridSize) / 2 - blockSize / 2) % blockSize) < 2) {
+                            // At intersection - check traffic light
+                            const light = trafficLights.find(l => 
+                                Math.round((l.redLight.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize === gridX &&
+                                Math.round((l.redLight.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize === gridZ
+                            );
+                            
+                            if (light && light.state !== 'green') {
+                                // Stop at red/yellow light
+                                return;
+                            }
+                            
+                            // Random chance to turn
+                            if (!car.nextTurn && Math.random() < 0.01) {
+                                car.nextTurn = Math.random() > 0.5 ? 'left' : 'right';
+                                car.turnProgress = 1;
+                            }
+                        }
+                    } else {
+                        car.object.position.z += car.speed * car.direction;
+                        
+                        // Check for intersection
+                        const gridX = Math.round((car.object.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        const gridZ = Math.round((car.object.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        
+                        if (Math.abs((car.object.position.z + (blockSize * gridSize) / 2 - blockSize / 2) % blockSize) < 2) {
+                            // At intersection - check traffic light
+                            const light = trafficLights.find(l => 
+                                Math.round((l.redLight.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize === gridX &&
+                                Math.round((l.redLight.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize === gridZ
+                            );
+                            
+                            if (light && light.state !== 'green') {
+                                // Stop at red/yellow light
+                                return;
+                            }
+                            
+                            // Random chance to turn
+                            if (!car.nextTurn && Math.random() < 0.01) {
+                                car.nextTurn = Math.random() > 0.5 ? 'left' : 'right';
+                                car.turnProgress = 1;
+                            }
+                        }
+                    }
+                    
+                    // Wrap around if out of bounds
+                    if (car.object.position.x < -(blockSize * gridSize) / 2) {
+                        car.object.position.x = (blockSize * gridSize) / 2;
+                    } else if (car.object.position.x > (blockSize * gridSize) / 2) {
+                        car.object.position.x = -(blockSize * gridSize) / 2;
+                    }
+                    
+                    if (car.object.position.z < -(blockSize * gridSize) / 2) {
+                        car.object.position.z = (blockSize * gridSize) / 2;
+                    } else if (car.object.position.z > (blockSize * gridSize) / 2) {
+                        car.object.position.z = -(blockSize * gridSize) / 2;
+                    }
+                }
+                
+                // Animate wheels
+                car.object.children.forEach(child => {
+                    if (child.geometry instanceof THREE.CylinderGeometry) {
+                        child.rotation.x += car.speed * 2;
+                    }
+                });
+            });
+            
+            // Update pedestrians
+            pedestrians.forEach(ped => {
+                if (ped.crossing) {
+                    ped.crossingProgress += 0.005;
+                    
+                    if (ped.horizontal) {
+                        ped.object.position.z += ped.speed * ped.direction;
+                    } else {
+                        ped.object.position.x += ped.speed * ped.direction;
+                    }
+                    
+                    if (ped.crossingProgress >= 1) {
+                        // Finished crossing
+                        ped.crossing = false;
+                        ped.horizontal = !ped.horizontal;
+                        ped.object.rotation.y += Math.PI / 2 * ped.direction;
+                    }
+                } else {
+                    // Walking on sidewalk
+                    if (ped.horizontal) {
+                        ped.object.position.x += ped.speed * ped.direction;
+                        
+                        // Check for crosswalk
+                        const gridX = Math.round((ped.object.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        const gridZ = Math.round((ped.object.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        
+                        if (Math.abs((ped.object.position.x + (blockSize * gridSize) / 2 - blockSize / 2) % blockSize) < 1) {
+                            // At intersection - random chance to cross
+                            if (Math.random() < 0.005) {
+                                ped.crossing = true;
+                                ped.crossingProgress = 0;
+                                ped.object.rotation.y -= Math.PI / 2 * ped.direction;
+                            }
+                        }
+                    } else {
+                        ped.object.position.z += ped.speed * ped.direction;
+                        
+                        // Check for crosswalk
+                        const gridX = Math.round((ped.object.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        const gridZ = Math.round((ped.object.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize);
+                        
+                        if (Math.abs((ped.object.position.z + (blockSize * gridSize) / 2 - blockSize / 2) % blockSize) < 1) {
+                            // At intersection - random chance to cross
+                            if (Math.random() < 0.005) {
+                                ped.crossing = true;
+                                ped.crossingProgress = 0;
+                                ped.object.rotation.y += Math.PI / 2 * ped.direction;
+                            }
+                        }
+                    }
+                    
+                    // Wrap around if out of bounds
+                    if (ped.object.position.x < -(blockSize * gridSize) / 2) {
+                        ped.object.position.x = (blockSize * gridSize) / 2;
+                    } else if (ped.object.position.x > (blockSize * gridSize) / 2) {
+                        ped.object.position.x = -(blockSize * gridSize) / 2;
+                    }
+                    
+                    if (ped.object.position.z < -(blockSize * gridSize) / 2) {
+                        ped.object.position.z = (blockSize * gridSize) / 2;
+                    } else if (ped.object.position.z > (blockSize * gridSize) / 2) {
+                        ped.object.position.z = -(blockSize * gridSize) / 2;
+                    }
+                }
+                
+                // Animate walking
+                if (!ped.crossing || ped.crossingProgress < 0.5) {
+                    ped.object.children[2].rotation.z = Math.sin(Date.now() * 0.01) * 0.5;
+                    ped.object.children[3].rotation.z = Math.sin(Date.now() * 0.01 + Math.PI) * 0.5;
+                }
+            });
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start animation
+        animate();
+        updateDayNightCycle();
+    </script>
+</body>
+</html>
