@@ -893,8 +893,8 @@
                         if (Math.abs((car.object.position.x + (blockSize * gridSize) / 2 - blockSize / 2) % blockSize) < 2) {
                             // At intersection - check traffic light
                             const light = trafficLights.find(l => 
-                                Math.round((l.redLight.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize === gridX &&
-                                Math.round((l.redLight.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize === gridZ
+                                Math.round((l.redLight.position.x + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize) === gridX &&
+                                Math.round((l.redLight.position.z + (blockSize * gridSize) / 2 - blockSize / 2) / blockSize) === gridZ
                             );
                             
                             if (light && light.state !== 'green') {
