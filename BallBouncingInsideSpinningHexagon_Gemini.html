@@ -1,0 +1,186 @@
+// Sketch Variables
+let ball;
+let hexagon;
+let gravity;
+let restitution = 0.8; // Bounciness (0 = no bounce, 1 = perfect bounce)
+
+// --- Ball Class ---
+class Ball {
+    constructor(x, y, r) {
+        this.pos = createVector(x, y);
+        this.vel = createVector(random(-2, 2), random(-2, 2)); // Initial velocity
+        this.acc = createVector(0, 0);
+        this.r = r;
+        this.mass = this.r * 0.1; // Mass proportional to radius (optional)
+        this.color = color(255, 100, 100);
+    }
+
+    applyForce(force) {
+        // F = ma -> a = F/m
+        let f = p5.Vector.div(force, this.mass);
+        this.acc.add(f);
+    }
+
+    applyGravity() {
+         this.applyForce(p5.Vector.mult(gravity, this.mass));
+    }
+
+    update() {
+        this.vel.add(this.acc);
+        this.pos.add(this.vel);
+        // Reset acceleration each frame
+        this.acc.mult(0);
+    }
+
+    display() {
+        noStroke();
+        fill(this.color);
+        ellipse(this.pos.x, this.pos.y, this.r * 2, this.r * 2);
+    }
+
+    // --- The Core Collision Logic ---
+    checkCollision(hexagon) {
+        let vertices = hexagon.getVertices();
+        let collided = false; // Flag to prevent multiple collisions per frame
+
+        for (let i = 0; i < vertices.length; i++) {
+            if (collided) break; // Only handle one collision per frame for simplicity
+
+            let v1 = vertices[i];
+            let v2 = vertices[(i + 1) % vertices.length]; // Wrap around for the last side
+
+            // --- 1. Find closest point on the line segment ---
+            let lineVec = p5.Vector.sub(v2, v1);
+            let pointVec = p5.Vector.sub(this.pos, v1);
+            let lineLenSq = lineVec.magSq();
+
+            // Project pointVec onto lineVec
+            let t = p5.Vector.dot(pointVec, lineVec) / lineLenSq;
+            t = constrain(t, 0, 1); // Clamp t to be within the segment
+
+            let closestPoint = p5.Vector.add(v1, p5.Vector.mult(lineVec, t));
+
+            // --- 2. Check distance ---
+            let distVec = p5.Vector.sub(this.pos, closestPoint);
+            let distance = distVec.mag();
+
+            // --- 3. Collision Detected ---
+            if (distance < this.r) {
+                collided = true; // Set collision flag
+
+                // --- 4. Calculate Normal ---
+                // Normal vector pointing outwards from the hexagon side
+                let normal = createVector(lineVec.y, -lineVec.x);
+                normal.normalize();
+                // Ensure normal points away from hexagon center (important!)
+                let centerToV1 = p5.Vector.sub(v1, createVector(hexagon.cx, hexagon.cy));
+                if (p5.Vector.dot(normal, centerToV1) < 0) {
+                    normal.mult(-1); // Flip normal if it points inwards
+                }
+
+
+                // --- 5. Calculate Wall Velocity at Collision Point ---
+                let rVec = p5.Vector.sub(closestPoint, createVector(hexagon.cx, hexagon.cy)); // Vector from hex center to collision point
+                let omega = hexagon.angleSpeed; // Angular velocity in radians/frame
+                // Tangential velocity: v = omega * r (perpendicular to r)
+                let wallVel = createVector(-omega * rVec.y, omega * rVec.x);
+
+                // --- 6. Calculate Relative Velocity ---
+                let relativeVel = p5.Vector.sub(this.vel, wallVel);
+
+                // --- 7. Check if moving towards the wall ---
+                // If dot product is positive, it's moving away already, ignore
+                if (p5.Vector.dot(relativeVel, normal) < 0) {
+
+                    // --- 8. Calculate Impulse Magnitude (using restitution) ---
+                    // Formula: j = -(1 + restitution) * (v_rel . n) / (1/m) // Simplified for infinite mass wall
+                    let j = -(1 + restitution) * p5.Vector.dot(relativeVel, normal);
+
+                    // --- 9. Apply Impulse (change in velocity) ---
+                    let impulse = p5.Vector.mult(normal, j);
+                    this.vel.add(p5.Vector.div(impulse, this.mass)); // Apply impulse: delta_v = impulse / mass
+
+                    // --- 10. Position Correction (prevent sinking) ---
+                    let overlap = this.r - distance;
+                    this.pos.add(p5.Vector.mult(normal, overlap * 1.01)); // Nudge slightly more than overlap
+                }
+            }
+        }
+    }
+}
+
+// --- Hexagon Class ---
+class Hexagon {
+    constructor(cx, cy, r, angleSpeed) {
+        this.cx = cx;
+        this.cy = cy;
+        this.r = r; // Radius from center to vertex
+        this.angle = 0;
+        this.angleSpeed = angleSpeed; // Radians per frame
+        this.numVertices = 6;
+    }
+
+    update() {
+        this.angle += this.angleSpeed;
+    }
+
+    getVertices() {
+        let vertices = [];
+        for (let i = 0; i < this.numVertices; i++) {
+            let currentAngle = this.angle + TWO_PI / this.numVertices * i;
+            let vx = this.cx + this.r * cos(currentAngle);
+            let vy = this.cy + this.r * sin(currentAngle);
+            vertices.push(createVector(vx, vy));
+        }
+        return vertices;
+    }
+
+    display() {
+        let vertices = this.getVertices();
+        stroke(255);
+        strokeWeight(2);
+        noFill();
+        beginShape();
+        for (let v of vertices) {
+            vertex(v.x, v.y);
+        }
+        endShape(CLOSE);
+    }
+}
+
+// --- p5.js Functions ---
+function setup() {
+    createCanvas(600, 600);
+    gravity = createVector(0, 0.2); // Adjust gravity strength as needed
+
+    let hexRadius = width / 2.5;
+    let hexAngleSpeed = 0.005; // Adjust rotation speed (radians/frame)
+    hexagon = new Hexagon(width / 2, height / 2, hexRadius, hexAngleSpeed);
+
+    let ballRadius = 15;
+    ball = new Ball(width / 2, height / 2, ballRadius);
+
+    // Optional: Give the ball an initial push
+    // ball.applyForce(createVector(random(-50,50), random(-50,-10)));
+}
+
+function draw() {
+    background(0);
+
+    // Update objects
+    hexagon.update();
+    ball.applyGravity();
+    ball.update(); // Update position *before* collision check
+
+    // Check and handle collisions
+    ball.checkCollision(hexagon);
+
+    // Display objects
+    hexagon.display();
+    ball.display();
+
+    // Display frame rate (optional)
+    // fill(255);
+    // noStroke();
+    // text("FPS: " + floor(frameRate()), 10, 20);
+}
