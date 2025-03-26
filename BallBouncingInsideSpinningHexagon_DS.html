@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bouncing Ball in Spinning Hexagon</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            overflow: hidden;
+        }
+        #sketch-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="sketch-container"></div>
+
+    <script>
+        let ball;
+        let hexagonSize = 300;
+        let hexagonRotation = 0;
+        let rotationSpeed = 0.02;
+        let gravity = 0.2;
+        let friction = 0.99;
+        let hexagonEdges = [];
+        
+        function setup() {
+            let canvas = createCanvas(600, 600);
+            canvas.parent('sketch-container');
+            
+            // Initialize ball
+            ball = {
+                pos: createVector(0, -hexagonSize * 0.4),
+                vel: createVector(2, 0),
+                radius: 20,
+                mass: 1
+            };
+            
+            // Initialize hexagon edges
+            updateHexagonEdges();
+        }
+        
+        function updateHexagonEdges() {
+            hexagonEdges = [];
+            for (let i = 0; i < 6; i++) {
+                let angle1 = hexagonRotation + i * TWO_PI / 6;
+                let angle2 = hexagonRotation + (i + 1) * TWO_PI / 6;
+                
+                let x1 = cos(angle1) * hexagonSize;
+                let y1 = sin(angle1) * hexagonSize;
+                let x2 = cos(angle2) * hexagonSize;
+                let y2 = sin(angle2) * hexagonSize;
+                
+                hexagonEdges.push({
+                    p1: createVector(x1, y1),
+                    p2: createVector(x2, y2),
+                    normal: createVector(y1 - y2, x2 - x1).normalize()
+                });
+            }
+        }
+        
+        function draw() {
+            background(240);
+            translate(width / 2, height / 2);
+            
+            // Update hexagon rotation and edges
+            hexagonRotation += rotationSpeed;
+            updateHexagonEdges();
+            
+            // Apply gravity
+            ball.vel.y += gravity;
+            
+            // Apply friction
+            ball.vel.mult(friction);
+            
+            // Update ball position
+            ball.pos.add(ball.vel);
+            
+            // Check collisions with hexagon edges
+            for (let edge of hexagonEdges) {
+                checkCollision(edge);
+            }
+            
+            // Draw hexagon
+            drawHexagon();
+            
+            // Draw ball
+            drawBall();
+        }
+        
+        function checkCollision(edge) {
+            // Find closest point on edge to ball
+            let edgeVec = p5.Vector.sub(edge.p2, edge.p1);
+            let ballToEdgeStart = p5.Vector.sub(ball.pos, edge.p1);
+            let edgeLength = edgeVec.mag();
+            let edgeUnit = edgeVec.copy().normalize();
+            
+            let projection = ballToEdgeStart.dot(edgeUnit);
+            projection = constrain(projection, 0, edgeLength);
+            
+            let closestPoint = p5.Vector.add(edge.p1, p5.Vector.mult(edgeUnit, projection));
+            
+            // Check if ball is colliding with edge
+            let distance = p5.Vector.dist(ball.pos, closestPoint);
+            if (distance < ball.radius) {
+                // Calculate penetration vector
+                let penetration = p5.Vector.sub(ball.pos, closestPoint);
+                penetration.setMag(ball.radius - distance);
+                
+                // Move ball out of collision
+                ball.pos.add(penetration);
+                
+                // Calculate relative velocity
+                let relativeVel = ball.vel.copy();
+                
+                // Calculate impulse (bounce)
+                let normal = edge.normal.copy();
+                let velAlongNormal = relativeVel.dot(normal);
+                
+                // Don't resolve if objects are moving away
+                if (velAlongNormal > 0) return;
+                
+                // Calculate restitution (bounciness)
+                let restitution = 0.8;
+                
+                // Calculate impulse scalar
+                let j = -(1 + restitution) * velAlongNormal;
+                j /= 1 / ball.mass;
+                
+                // Apply impulse
+                let impulse = p5.Vector.mult(normal, j);
+                ball.vel.add(impulse);
+            }
+        }
+        
+        function drawHexagon() {
+            push();
+            noFill();
+            stroke(0);
+            strokeWeight(2);
+            beginShape();
+            for (let i = 0; i < 6; i++) {
+                let angle = hexagonRotation + i * TWO_PI / 6;
+                let x = cos(angle) * hexagonSize;
+                let y = sin(angle) * hexagonSize;
+                vertex(x, y);
+            }
+            endShape(CLOSE);
+            pop();
+        }
+        
+        function drawBall() {
+            push();
+            fill(255, 0, 0);
+            noStroke();
+            ellipse(ball.pos.x, ball.pos.y, ball.radius * 2);
+            pop();
+        }
+    </script>
+</body>
+</html>
